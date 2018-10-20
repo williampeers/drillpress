@@ -1,0 +1,21 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "apollo-server": "^2.0.7",
+    "graphql": "^14.0.2",
+    "mongoose": "^5.2.14",
+    "node-opencv": "0.0.2-security",
+    "opencv4nodejs": "^4.9.0",
+    "raspi-serial": "^5.0.0",
+    "serialport": "^7.0.2"
+  }
+}

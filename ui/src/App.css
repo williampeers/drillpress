@@ -1,0 +1,42 @@
+.App {
+  text-align: center;
+  overflow-x: hidden;
+}
+
+.Header {
+  background-color: #282c34;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  min-height: 15vh;
+  color: white;
+  padding: 0px;
+}
+
+.Body {
+  min-height: 85vh;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+.NavLink {
+  color: white;
+  display: block;
+  text-align: left;
+  padding: 15px 14px 0px 10px;
+  text-decoration: none;
+  font-size: 15px
+}
+
+.Navigation {
+  background-color: #484f60;
+  width: 100px;
+}
+
+.NavLink.active {
+  text-decoration: underline;
+  font-weight: 700;
+  font-size: 20px;
+}
