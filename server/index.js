@@ -1,173 +1,165 @@
-var mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost/test');
+const low = require('lowdb')
+const FileSync = require('lowdb/adapters/FileSync')
+const lodashId = require('lodash-id')
 
-var db = mongoose.connection;
-const Serial = require('./serial')
+const adapter = new FileSync('db.json')
+const db = low(adapter)
+const shortid = require('shortid')
 
-const serial = new Serial("/dev/ttyUSB0")
+db.defaults({ jobs: [], power: false, drill_state: 'idle'}).write()
+db.set('power', true).write()
 
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', function() {
-  console.log("connected")
+
+// const Serial = require('./serial')
+
+var server = require('http').createServer();
+var io = require('socket.io')(server);
+
+
+
+const emit_state = () => io.emit('drill_state', db.get('drill_state').value())
+
+const set_drill_state = (drill_state) => {db.set('drill_state', drill_state).write(); emit_state()}
+const emit_operation= (operation) => {io.emit('operation', operation)}
+
+const emit_all_jobs = () => io.emit('all_jobs', db.get('jobs').value())
+
+const emit_next_block = () => {
+  let jobs = db.get('jobs').value()
+  if (jobs.length == 0) {
+    set_drill_state('idle')
+    return null
+  } else {
+    if (jobs[0].complete >= jobs[0].count) {
+      db.get('jobs')
+        .remove({id: jobs[0].id})
+        .write()
+      emit_all_jobs()
+      emit_next_block()
+    } else {
+      io.emit('next_block', {holes: jobs[0].holes, depth: jobs[0].depth, id: jobs[0].id})
+    }
+  }
+}
+
+io.on('connection', function(client){
+  console.log("Client Connected")
+    let jobs = db.get('jobs')
+      .value()
+    console.log(`Jobs: ${jobs}`)
+    client.emit('all_jobs', jobs);
+    client.emit('power', db.get('power').value())
+
+  client.on('disconnect', () => {
+    console.log("Client Disconnected")
+  });
+
+  client.on('add_job', ({count, holes, depth}) => {
+    console.log("Add a job")
+    db.get('jobs')
+      .push({id: shortid.generate(), count, holes, depth, complete: 0})
+      .write()
+    emit_all_jobs()
+  });
+
+  client.on('current_job', () => {
+    console.log("current job")
+    let job = db.get('jobs')
+      .sortBy('id')
+      .take(1)
+      .value()[0]
+  });
+
+  client.on('all_jobs', () => {
+    console.log("All jobs")
+    let jobs =  db.get('jobs')
+      .value()
+    client.emit('all_jobs', jobs)
+  });
+
+  client.on('remove_job', ({id}) => {
+    console.log(`Remove Job ${id}`)
+    db.get('jobs')
+      .remove({id})
+      .write()
+    emit_all_jobs()
+  });
+
+  client.on('turnon', () => {
+    db.set('power', true)
+      .write()
+    io.emit('power', true)
+  });
+
+  client.on('turnoff', () => {
+    db.set('power', false)
+      .write()
+    io.emit('power', false)
+  });
+
+  client.on('power', () => {
+    client.emit('power', db.get('power').value())
+  });
+
+  client.on('get_drill_state', () => {
+    client.emit('drill_state', db.get('drill_state').value())
+  })
+
+  client.on('set_drill_state', (state) => {
+    set_drill_state(state)
+  })
+
+  client.on('start', () => {
+    io.emit("drill_start")
+  })
+
+  client.on('stop', () => {
+    io.emit("drill_stop")
+  })
+
+  client.on('drill_extend', () => {
+    io.emit('drill_extend')
+  })
+
+  client.on('drill_retract', () => {
+    io.emit('drill_retract')
+  })
+
+  client.on('drill_moveto', (position) => {
+    io.emit('drill_moveto', position)
+  })
+
+  client.on('linear_down', () => {
+    io.emit('linear_down')
+  })
+
+  client.on('linear_up', () => {
+    io.emit('linear_up')
+  })
+
+  client.on('linear_moveto', (position) => {
+    io.emit('linear_moveto', position)
+  })
+
+  client.on('next_block', () => {
+    emit_next_block()
+  })
+
+  client.on('block_done', ({id}) => {
+    console.log(`Block done ${id}`)
+    let block = db.get('jobs')
+      .find({id})
+      .value()
+    if (!block) {
+      return
+    }
+    db.get('jobs')
+      .find({id})
+      .assign({ complete: block.complete + 1})
+      .write()
+    emit_all_jobs()
+  })
 });
 
-var blockDesignSchema = new mongoose.Schema({
-  holes: [{
-    centerY: Number,
-    diameter: Number,
-  }],
-  time: Number,
-  length: Number,
-  width: Number,
-  complete: Boolean,
-});
-
-var blockSchema = new mongoose.Schema({
-  holes: [{
-    centerY: Number,
-    centerX: Number,
-    complete: Boolean,
-    diameter: Number,
-  }],
-  time: Number,
-  length: Number,
-  width: Number,
-  startTime: Number,
-  completeTime: Number,
-  complete: Boolean,
-  design: blockDesignSchema
-});
-
-
-
-var Block = mongoose.model('Block', blockSchema);
-
-
-const { ApolloServer, gql, PubSub } = require('apollo-server');
-const pubsub = new PubSub();
-
-const typeDefs = gql`
-
-  input HoleInput{
-    centerY: Float
-    centerX: Float
-    complete: Boolean
-    diameter: Float
-  }
-
-  type BlockDesign {
-    name: String
-    holes: [Hole]
-    length: Float
-    width: Float
-    id: ID
-  }
-
-  type Hole {
-    centerY: Float
-    centerX: Float
-    complete: Boolean
-    diameter: Float
-    id: ID
-  }
-
-  type Block {
-    id: ID
-    holes: [Hole]
-    startTime: String
-    completeTime: String
-    complete: Boolean
-    length: Float
-    design: BlockDesign
-    width: Float
-  }
-
-  type Mutation {
-    startBlock(length: Float, width: Float, holes: [HoleInput]): Block
-    addHole(block_id: ID, diameter: Float, centerX: Float, centerY: Float): Block
-    completeBlock(id: ID): Block
-    deleteBlock(id: ID): Block
-    deleteBlockDesign(id: ID): BlockDesign
-    createBlockDesign(length: Float, width: Float, holes: [HoleInput]): BlockDesign
-  }
-
-  type Query {
-    block(id: ID): Block
-    allBlocks: [Block]
-    blocksBetween(from: Int, to: Int): [Block]
-    blockDesign(id: ID): BlockDesign
-    allBlockDesigns: [BlockDesign]
-  }
-
-  type Subscription {
-    blockCompleted: Block
-    blockStarted: Block
-    timePerBlock: Float
-  }
-`;
-
-// Resolvers define the technique for fetching the types in the
-// schema.  We'll retrieve books from the "books" array above.
-const resolvers = {
-  Mutation: {
-    startBlock: (_, {width, length, holes}) => {
-      return Block.create({width, length, holes, startTime: new Date().getTime()}).then(block => {
-        pubsub.publish('BLOCK_STARTED', {blockStarted: block});
-        return block
-      })
-    },
-    completeBlock: (_, {id}) => {
-      return Block.findByIdAndUpdate(id, {complete: true, completeTime: new Date().getTime()}, {new: true}).then(block => {
-        let now = new Date().getTime()
-        return Block.find({complete: true, startTime: { "$gte": now - 1* 60 * 1000  }}).limit(5).then(blocks => {
-          let sum = 0
-          blocks.forEach(({startTime, completeTime}) => {
-            sum += completeTime - startTime
-          })
-          pubsub.publish('TIME_PER_BLOCK', {timePerBlock: sum/blocks.length / 1000});
-          pubsub.publish('BLOCK_COMPLETED', {blockCompleted: block});
-          return block
-        })
-      })
-    },
-    addHole: (_, {block_id, diameter, centerX, centerY}) => {
-      return Block.findByIdAndUpdate(block_id, 
-        { $push: { holes: {diameter, centerX, centerY} } },
-        {new: true}
-      )
-    },
-    deleteBlock: (_, {id}) => Block.deleteByIdAndDelete(id).exec(),
-    deleteBlockDesign: (_, {id}) => BlockDesign.deleteByIdAndDelete(id).exec(),
-    createBlockDesign: (_, {length, width, holes}) => Block.create({length, width, holes})
-  },
-  Query: {
-    block: (_, {id}) => Block.findById(id).exec(),
-    allBlocks: () => Block.find({}).exec(),
-    blocksBetween: (_, {from, to}) => Block.find().exec(),
-    allBlockDesigns: (_,{id, name}) => {
-      if (id) {
-        return BlockDesign.findById(id).exec()
-      } else {
-        return BlockDesign.findOne({name}).exec()
-      }
-    },
-    blockDesign: (_,) => BlockDesign.find({}).exec(),
-  },
-  Subscription: {
-    blockCompleted:  {
-      subscribe: () => pubsub.asyncIterator(['BLOCK_COMPLETED'])
-    }, 
-    blockStarted:  {
-      subscribe: () => pubsub.asyncIterator(['BLOCK_STARTED'])
-    },
-    timePerBlock: {
-      subscribe: () => pubsub.asyncIterator(['TIME_PER_BLOCK'])
-    },
-  }
-};
-
-
-const server = new ApolloServer({ typeDefs, resolvers });
-server.listen().then(({ url }) => {
-  console.log(`🚀  Server ready at ${url}`);
-});
+console.log("starting...")
+server.listen(8000);

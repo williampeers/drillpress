@@ -4,7 +4,7 @@ class Home extends Component {
   render() {
     return (
     <div style={{padding: 20}}>
-      Home
+      Show some stats here and some high level settings and controls
     </div>
     );
   }
