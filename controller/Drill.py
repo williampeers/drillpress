@@ -1,22 +1,26 @@
 from threading import Thread
 import serial, time
-import cv2, imutils, sys
-
-from Camera import Camera
-
 
 class Drill(Thread):
     def __init__(self, port, get_next_block, block_done, emit_state):
         Thread.__init__(self)
         self.port = port
-        self.ser = serial.Serial(port)
         self.current_block = None
         self.get_next_block = get_next_block
         self.block_done = block_done
         self.emit_state = emit_state
         self.drill_on = True
-        self.cam = Camera()
+        self.ser = None
+        self.baudrate = 9600
+        self.connected = False
+
+    # def ser_send(self, command):
+    #     try:
+    #         ser_send
         
+    def connect(self):
+        if not self.connected:
+            self.ser = serial.Serial(self.port, baudrate=self.baudrate)
 
     def run(self):
         while True:
@@ -37,7 +41,7 @@ class Drill(Thread):
 
             if self.current_block["holes"] == []:
                 self.emit_state('waiting')
-                self.block_done({'id' : self.current_block["id"], 'success': self.cam.check_block()})
+                self.block_done({'id' : self.current_block["id"]})
                 self.current_block = None
                 continue
         
@@ -86,19 +90,3 @@ class Drill(Thread):
         self.emit_state('idle')
         self.drill_on = True
         print("start drill")
-
-    def check_holes(self):
-        ret, img = self.cam.read()
-        if ret:
-            _img = img
-            count = 0
-            while ret:
-                count += 1
-                img = _img
-                ret, _img = self.cam.read()
-
-            blurred = cv2.GaussianBlur(img, (9, 9), 0)
-            edges = cv2.Canny(blurred, 50, 80)
-            cv2.imshow("", edges)
-            cv2.waitKey(1)
-        return True
