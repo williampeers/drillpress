@@ -2,8 +2,11 @@ from socketIO_client import SocketIO, LoggingNamespace
 import json
 from Drill import Drill
 
+socketIO = SocketIO('192.168.0.100', 8000, LoggingNamespace)
+
 def on_connect():
     print('connect')
+    socketIO.emit('drill_state')
 
 def on_disconnect():
     print('disconnect')
@@ -11,13 +14,9 @@ def on_disconnect():
 def on_reconnect():
     print('reconnect')
 
-socketIO = SocketIO('192.168.0.100', 8000, LoggingNamespace)
-
 socketIO.on('connect', on_connect)
 socketIO.on('disconnect', on_disconnect)
 socketIO.on('reconnect', on_reconnect)
-
-
 
 def get_next_block():
     socketIO.emit('next_block')
