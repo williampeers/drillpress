@@ -35,7 +35,7 @@ class ROI:
         self.perspective_transform = None
         self.got_transform = False
         self.border_points = []
-        self.original_shape = (1280, 840)
+        self.original_shape = (680, 480)
         self.offset = (0, 0)
 
     def transform(self, img):
