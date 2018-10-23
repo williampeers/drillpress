@@ -21,14 +21,15 @@ socketIO.on('reconnect', on_reconnect)
 def get_next_block():
     socketIO.emit('next_block')
 
-def block_done(arg):
-    print("block done")
-    socketIO.emit('block_done', arg)
+def block_drilled(arg):
+    print("block drilled")
+    socketIO.emit('block_drilled', arg)
+    socketIO.emit('checked_block', arg)
 
 def emit_state(state):
     socketIO.emit('set_drill_state', state)
 
-drill = Drill("/dev/ttyAMA0", get_next_block, block_done, emit_state)
+drill = Drill("/dev/ttyUSB*", get_next_block, block_drilled, emit_state)
 
 socketIO.on('next_block', drill.got_next_block)
 

@@ -13,8 +13,8 @@ import Settings from './components/Settings'
 import { SocketProvider } from 'socket.io-react';
 import io from 'socket.io-client';
 
-const socket = io.connect("192.168.0.100:8000");
- 
+const socket = io.connect(`${window.location.hostname}:8000`);
+
 class App extends Component {
   render() {
     return (

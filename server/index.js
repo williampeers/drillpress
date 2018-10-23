@@ -6,16 +6,13 @@ const adapter = new FileSync('db.json')
 const db = low(adapter)
 const shortid = require('shortid')
 
-db.defaults({ jobs: [], power: false, drill_state: 'idle'}).write()
+db.defaults({ jobs: [], drilled_blocks: [], power: false, drill_state: 'idle'}).write()
 db.set('power', true).write()
-
 
 // const Serial = require('./serial')
 
 var server = require('http').createServer();
 var io = require('socket.io')(server);
-
-
 
 const emit_state = () => io.emit('drill_state', db.get('drill_state').value())
 
@@ -37,7 +34,7 @@ const emit_next_block = () => {
       emit_all_jobs()
       emit_next_block()
     } else {
-      io.emit('next_block', {holes: jobs[0].holes, depth: jobs[0].depth, id: jobs[0].id})
+      io.emit('next_block', {drilled: jobs[0].drilled, count: jobs[0].count, holes: jobs[0].holes, depth: jobs[0].depth, id: jobs[0].id})
     }
   }
 }
@@ -54,10 +51,35 @@ io.on('connection', function(client){
     console.log("Client Disconnected")
   });
 
+  client.on('checked_block', ({holes}) => {
+    console.log(`check_block: ${holes}`)
+    let blocks = db.get('drilled_blocks').value()
+    let target_holes = db.get('jobs')
+      .find({id: blocks[0].id}).value().holes
+    let success = true
+    for (i in holes) {
+      if (abs(holes[i] - target_holes[i]) > 1) {
+        success = false
+      }
+    }
+    if (success) { 
+      db.get('jobs')
+        .find({id: blocks[0].id})
+        .assign({ complete: blocks[0].complete + 1})
+        .write()
+      emit_all_jobs()
+      emit_next_block()
+    } else {
+      console.log("block failed")
+    }
+    blocks.shift()
+    db.set('drilled_blocks', blocks).write()
+  })
+
   client.on('add_job', ({count, holes, depth}) => {
     console.log("Add a job")
     db.get('jobs')
-      .push({id: shortid.generate(), count, holes, depth, complete: 0})
+      .push({id: shortid.generate(), count: parseInt(count), holes, depth, complete: 0, drilled: 0})
       .write()
     emit_all_jobs()
   });
@@ -80,6 +102,9 @@ io.on('connection', function(client){
   client.on('remove_job', ({id}) => {
     console.log(`Remove Job ${id}`)
     db.get('jobs')
+      .remove({id})
+      .write()
+    db.get('drilled_blocks')
       .remove({id})
       .write()
     emit_all_jobs()
@@ -145,17 +170,20 @@ io.on('connection', function(client){
     emit_next_block()
   })
 
-  client.on('block_done', ({id}) => {
-    console.log(`Block done ${id}`)
+  client.on('block_drilled', ({id}) => {
+    console.log(`Block drilled ${id}`)
     let block = db.get('jobs')
       .find({id})
       .value()
     if (!block) {
       return
     }
+    db.get('drilled_blocks')
+      .push(block)
+      .write()
     db.get('jobs')
       .find({id})
-      .assign({ complete: block.complete + 1})
+      .assign({ drilled: block.drilled + 1})
       .write()
     emit_all_jobs()
   })
