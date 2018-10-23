@@ -24,7 +24,7 @@ def get_next_block():
 def block_drilled(arg):
     print("block drilled")
     socketIO.emit('block_drilled', arg)
-    socketIO.emit('checked_block', arg)
+    # socketIO.emit('checked_block', arg)
 
 def emit_state(state):
     socketIO.emit('set_drill_state', state)

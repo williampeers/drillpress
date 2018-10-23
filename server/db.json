@@ -1,21 +1,6 @@
 {
-  "jobs": [
-    {
-      "id": "Z9nsLaNuW",
-      "count": 20,
-      "holes": [
-        "50",
-        "100",
-        "150",
-        "200",
-        "250"
-      ],
-      "depth": 10,
-      "complete": 11,
-      "drilled": 11
-    }
-  ],
+  "jobs": [],
   "drilled_blocks": [],
   "power": true,
-  "drill_state": "drilling"
+  "drill_state": "idle"
 }

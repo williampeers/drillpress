@@ -43,7 +43,6 @@ io.on('connection', function(client){
   console.log("Client Connected")
     let jobs = db.get('jobs')
       .value()
-    console.log(`Jobs: ${jobs}`)
     client.emit('all_jobs', jobs);
     client.emit('power', db.get('power').value())
 
@@ -51,29 +50,33 @@ io.on('connection', function(client){
     console.log("Client Disconnected")
   });
 
-  client.on('checked_block', ({holes}) => {
+  client.on('checked_block', (obj) => {
+    holes = obj.holes
+    console.log(obj)
     console.log(`check_block: ${holes}`)
     let blocks = db.get('drilled_blocks').value()
-    let target_holes = db.get('jobs')
-      .find({id: blocks[0].id}).value().holes
-    let success = true
-    for (i in holes) {
-      if (abs(holes[i] - target_holes[i]) > 1) {
-        success = false
+    if (blocks.length > 0) {
+      let target_holes = db.get('jobs')
+        .find({id: blocks[0].id}).value().holes
+      let success = true
+      for (i in holes) {
+        if (Math.abs(holes[i] - target_holes[i]) > 1) {
+          success = false
+        }
       }
+      if (success) { 
+        db.get('jobs')
+          .find({id: blocks[0].id})
+          .assign({ complete: blocks[0].complete + 1})
+          .write()
+        emit_all_jobs()
+        emit_next_block()
+      } else {
+        console.log("block failed")
+      }
+      blocks.shift()
+      db.set('drilled_blocks', blocks).write()
     }
-    if (success) { 
-      db.get('jobs')
-        .find({id: blocks[0].id})
-        .assign({ complete: blocks[0].complete + 1})
-        .write()
-      emit_all_jobs()
-      emit_next_block()
-    } else {
-      console.log("block failed")
-    }
-    blocks.shift()
-    db.set('drilled_blocks', blocks).write()
   })
 
   client.on('add_job', ({count, holes, depth}) => {
